@@ -1,4 +1,4 @@
-yamlname: Update News Daily
+name: Update News Daily
 
 on:
   schedule:
