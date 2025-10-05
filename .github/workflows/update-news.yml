@@ -1,0 +1,43 @@
+yamlname: Update News Daily
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: 📰 Fetch latest news
+        env:
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+        run: node fetch-news.js
+        
+      - name: 📊 Check if news data changed
+        id: check_changes
+        run: |
+          git diff --quiet news-data.json || echo "changed=true" >> $GITHUB_OUTPUT
+          
+      - name: 💾 Commit and push if changed
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add news-data.json
+          git commit -m "🔄 Auto-update news - $(date +'%Y-%m-%d %H:%M')"
+          git push
+          
+      - name: ✅ Deployment notification
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          echo "✅ News updated successfully!"
