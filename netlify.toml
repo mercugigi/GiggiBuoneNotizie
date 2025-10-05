@@ -1,0 +1,22 @@
+[build]
+  publish = "."
+  command = "echo 'No build needed - static site'"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+[[headers]]
+  for = "/news-data.json"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Access-Control-Allow-Origin = "*"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

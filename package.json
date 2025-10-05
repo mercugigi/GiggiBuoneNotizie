@@ -1,0 +1,21 @@
+{
+  "name": "news-daily-system",
+  "version": "1.0.0",
+  "description": "Sistema automatico di notizie che si aggiorna ogni giorno",
+  "main": "fetch-news.js",
+  "scripts": {
+    "fetch": "node fetch-news.js",
+    "test": "node fetch-news.js"
+  },
+  "keywords": [
+    "news",
+    "automation",
+    "newsapi",
+    "daily-update"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

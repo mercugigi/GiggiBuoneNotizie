@@ -1,0 +1,66 @@
+{
+  "lastUpdate": "2025-10-05T06:00:00.000Z",
+  "totalArticles": 6,
+  "articles": [
+    {
+      "title": "Nuova scoperta scientifica rivoluziona il settore dell'energia pulita",
+      "description": "Ricercatori hanno sviluppato una tecnologia innovativa per la produzione di energia solare con efficienza record del 45%",
+      "content": "Un team internazionale di scienziati ha annunciato una svolta rivoluzionaria nel campo dell'energia solare. La nuova tecnologia fotovoltaica raggiunge un'efficienza del 45%, quasi il doppio rispetto ai pannelli solari tradizionali. Questa innovazione potrebbe accelerare significativamente la transizione verso fonti di energia rinnovabile e ridurre i costi dell'elettricità per milioni di persone in tutto il mondo.",
+      "url": "https://example.com/news/1",
+      "source": "Science Daily",
+      "publishedAt": "2025-10-05T06:00:00Z",
+      "category": "science",
+      "urlToImage": null
+    },
+    {
+      "title": "Mercati azionari registrano crescita record nel terzo trimestre",
+      "description": "Le borse mondiali chiudono il trimestre con performance straordinarie grazie all'ottimismo degli investitori",
+      "content": "I mercati finanziari globali hanno concluso il terzo trimestre 2025 con risultati eccezionali. L'indice S&P 500 ha guadagnato il 12% mentre le borse europee hanno registrato incrementi simili. Gli analisti attribuiscono questa crescita alla stabilità economica e all'innovazione tecnologica che continua a spingere la produttività.",
+      "url": "https://example.com/news/2",
+      "source": "Financial Times",
+      "publishedAt": "2025-10-05T05:30:00Z",
+      "category": "business",
+      "urlToImage": null
+    },
+    {
+      "title": "Intelligenza Artificiale: nuove linee guida etiche approvate dall'ONU",
+      "description": "Le Nazioni Unite stabiliscono standard globali per l'uso responsabile dell'AI",
+      "content": "L'Assemblea Generale delle Nazioni Unite ha approvato all'unanimità un nuovo framework etico per lo sviluppo e l'utilizzo dell'intelligenza artificiale. Le linee guida puntano a garantire che l'AI sia sviluppata nel rispetto dei diritti umani, della privacy e della sicurezza. Esperti del settore hanno accolto positivamente questa iniziativa come passo fondamentale per regolamentare un settore in rapida evoluzione.",
+      "url": "https://example.com/news/3",
+      "source": "Reuters",
+      "publishedAt": "2025-10-05T05:00:00Z",
+      "category": "technology",
+      "urlToImage": null
+    },
+    {
+      "title": "Nuova terapia genica mostra risultati promettenti contro malattie rare",
+      "description": "Studio clinico dimostra efficacia del 90% nel trattamento di patologie genetiche",
+      "content": "Una sperimentazione clinica internazionale ha prodotto risultati straordinari con una nuova terapia genica. Il trattamento ha mostrato un tasso di successo del 90% in pazienti affetti da rare malattie genetiche. I ricercatori sono ottimisti che questa tecnica possa essere applicata anche ad altre condizioni, aprendo nuove prospettive per la medicina personalizzata.",
+      "url": "https://example.com/news/4",
+      "source": "BBC Health",
+      "publishedAt": "2025-10-05T04:30:00Z",
+      "category": "health",
+      "urlToImage": null
+    },
+    {
+      "title": "Campionato mondiale di calcio: sorprese nei quarti di finale",
+      "description": "Risultati inaspettati sconvolgono le previsioni degli esperti",
+      "content": "I quarti di finale del campionato mondiale hanno riservato sorprese clamorose. La squadra favorita è stata eliminata ai rigori mentre un'outsider ha conquistato la semifinale con una vittoria storica. Le prossime partite promettono emozioni ancora più intense mentre le squadre rimaste in gara puntano al titolo mondiale.",
+      "url": "https://example.com/news/5",
+      "source": "ESPN",
+      "publishedAt": "2025-10-05T04:00:00Z",
+      "category": "sports",
+      "urlToImage": null
+    },
+    {
+      "title": "Cinema: nuovo film batte record al box office nel weekend di apertura",
+      "description": "La pellicola più attesa dell'anno supera ogni aspettativa commerciale",
+      "content": "Il film più atteso dell'anno ha infranto ogni record al botteghino nel suo weekend di apertura, incassando oltre 300 milioni di dollari a livello globale. La critica ha elogiato la regia innovativa e le performance attoriali eccezionali. Gli studios prevedono che potrebbe diventare uno dei maggiori successi commerciali della storia del cinema.",
+      "url": "https://example.com/news/6",
+      "source": "Variety",
+      "publishedAt": "2025-10-05T03:30:00Z",
+      "category": "entertainment",
+      "urlToImage": null
+    }
+  ]
+}
