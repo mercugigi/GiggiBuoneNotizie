@@ -2,37 +2,74 @@ name: Update News Daily
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * *'   # ogni giorno alle 06:00 CET
   workflow_dispatch:
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
-    
+
+    permissions:
+      contents: write   # serve per fare commit e push
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          
+            node-version: '18'
+
+      - name: Install deps (if any)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          else
+            echo "No package.json found, skipping install"
+          fi
+
       - name: Fetch latest news
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: node fetch-news.js
-        
-      - name: Check if news data changed
-        id: check_changes
+
+      - name: Validate news-data.json
         run: |
-          git diff --quiet news-data.json || echo "changed=true" >> $GITHUB_OUTPUT
-          
-      - name: Commit and push if changed
-        if: steps.check_changes.outputs.changed == 'true'
+          test -f news-data.json
+          node -e "JSON.parse(require('fs').readFileSync('news-data.json','utf8'))"
+
+      - name: Check for changes
+        id: diff
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
           git add news-data.json
-          git commit -m "Auto-update news"
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit & push if changed
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: update news-data.json [skip ci]"
           git push
+
+      # Opzionale: forza il deploy Netlify se NON hai il collegamento automatico GitHub→Netlify
+      - name: Trigger Netlify build hook (optional)
+        if: steps.diff.outputs.changed == 'true' && env.NETLIFY_BUILD_HOOK_URL
+        env:
+          NETLIFY_BUILD_HOOK_URL: ${{ secrets.NETLIFY_BUILD_HOOK_URL }}
+        run: |
+          curl -s -X POST -d '{}' "$NETLIFY_BUILD_HOOK_URL" || true
+
+      # Debug minimo quando fallisce
+      - name: Print news-data snippet (debug on failure)
+        if: failure()
+        run: |
+          echo "=== news-data.json head ==="
+          head -n 50 news-data.json || true
