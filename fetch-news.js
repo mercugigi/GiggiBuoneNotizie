@@ -1,157 +1,92 @@
-const https = require('https');
+// fetch-news.js
+// Aggiorna news-data.json solo se arrivano dati validi e diversi dai precedenti.
+
 const fs = require('fs');
+const path = require('path');
+const https = require('https');
 
-// Configurazione categorie
-const categories = ['technology', 'business', 'science', 'health', 'sports', 'entertainment'];
-const articlesPerCategory = 5;
-
-// API NewsAPI
-const API_KEY = process.env.NEWS_API_KEY || 'YOUR_API_KEY_HERE';
-const BASE_URL = 'newsapi.org';
-
-// Fonti affidabili
-const sources = [
-    'bbc-news',
-    'reuters',
-    'the-guardian-uk',
-    'associated-press',
-    'cnn',
-    'the-washington-post'
-].join(',');
-
-// Funzione per chiamare NewsAPI
-function fetchNews(category) {
-    return new Promise((resolve, reject) => {
-        const today = new Date().toISOString().split('T')[0];
-        
-        const options = {
-            hostname: BASE_URL,
-            path: `/v2/top-headlines?category=${category}&language=it&pageSize=${articlesPerCategory}&apiKey=${API_KEY}`,
-            method: 'GET'
-        };
-
-        const req = https.request(options, (res) => {
-            let data = '';
-
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-
-            res.on('end', () => {
-                try {
-                    const json = JSON.parse(data);
-                    
-                    if (json.status === 'ok' && json.articles) {
-                        const articles = json.articles.map(article => ({
-                            title: article.title,
-                            description: article.description,
-                            content: article.content || article.description,
-                            url: article.url,
-                            source: article.source.name,
-                            publishedAt: article.publishedAt,
-                            category: category,
-                            urlToImage: article.urlToImage
-                        }));
-                        resolve(articles);
-                    } else {
-                        console.error(`Errore API per ${category}:`, json.message);
-                        resolve([]);
-                    }
-                } catch (err) {
-                    console.error(`Errore parsing per ${category}:`, err);
-                    resolve([]);
-                }
-            });
-        });
-
-        req.on('error', (err) => {
-            console.error(`Errore richiesta per ${category}:`, err);
-            resolve([]);
-        });
-
-        req.end();
-    });
+const NEWS_API_KEY = process.env.NEWS_API_KEY;
+if (!NEWS_API_KEY) {
+  console.error('ERROR: missing NEWS_API_KEY secret');
+  process.exit(1);
 }
 
-// Funzione principale
-async function generateNewsData() {
-    console.log('🚀 Inizio recupero notizie...');
-    console.log(`📅 Data: ${new Date().toLocaleDateString('it-IT')}`);
+// Esempio con NewsAPI.org (modifica query/endpoint a tuo piacere)
+const NEWS_URL = `https://newsapi.org/v2/top-headlines?language=it&category=general&pageSize=50&apiKey=${NEWS_API_KEY}`;
 
-    let allArticles = [];
-
-    // Recupera notizie per ogni categoria
-    for (const category of categories) {
-        console.log(`\n📰 Recupero notizie: ${category}...`);
-        const articles = await fetchNews(category);
-        console.log(`✅ Trovate ${articles.length} notizie per ${category}`);
-        allArticles = allArticles.concat(articles);
-        
-        // Pausa per evitare rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // Se non ci sono abbastanza notizie italiane, prova con notizie internazionali
-    if (allArticles.length < 15) {
-        console.log('\n🌍 Aggiungo notizie internazionali...');
-        for (const category of categories) {
-            const options = {
-                hostname: BASE_URL,
-                path: `/v2/top-headlines?category=${category}&language=en&pageSize=${articlesPerCategory}&apiKey=${API_KEY}`,
-                method: 'GET'
-            };
-
-            const articles = await new Promise((resolve) => {
-                const req = https.request(options, (res) => {
-                    let data = '';
-                    res.on('data', (chunk) => data += chunk);
-                    res.on('end', () => {
-                        try {
-                            const json = JSON.parse(data);
-                            if (json.status === 'ok' && json.articles) {
-                                resolve(json.articles.map(a => ({
-                                    title: a.title,
-                                    description: a.description,
-                                    content: a.content || a.description,
-                                    url: a.url,
-                                    source: a.source.name,
-                                    publishedAt: a.publishedAt,
-                                    category: category,
-                                    urlToImage: a.urlToImage
-                                })));
-                            } else resolve([]);
-                        } catch (err) {
-                            resolve([]);
-                        }
-                    });
-                });
-                req.on('error', () => resolve([]));
-                req.end();
-            });
-
-            allArticles = allArticles.concat(articles);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
-
-    // Limita a 30 articoli totali
-    allArticles = allArticles.slice(0, 30);
-
-    // Salva nel file JSON
-    const newsData = {
-        lastUpdate: new Date().toISOString(),
-        totalArticles: allArticles.length,
-        articles: allArticles
-    };
-
-    fs.writeFileSync('news-data.json', JSON.stringify(newsData, null, 2));
-    console.log(`\n✅ File news-data.json creato con successo!`);
-    console.log(`📊 Totale articoli: ${allArticles.length}`);
-    console.log(`⏰ Ultimo aggiornamento: ${new Date().toLocaleString('it-IT')}`);
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              return reject(
+                new Error(`HTTP ${res.statusCode}: ${data?.slice(0, 200)}`)
+              );
+            }
+            resolve(JSON.parse(data));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      })
+      .on('error', reject)
+      .setTimeout(15000, function () {
+        this.destroy(new Error('Request timeout'));
+      });
+  });
 }
 
-// Esegui
-generateNewsData().catch(err => {
-    console.error('❌ Errore:', err);
-    process.exit(1);
+function normalize(items) {
+  // Pulisci/minimizza i campi utili per la tua UI
+  return (items || [])
+    .filter((x) => x && x.title && x.url)
+    .map((x) => ({
+      title: x.title,
+      url: x.url,
+      source: x.source?.name || '',
+      publishedAt: x.publishedAt || '',
+      description: x.description || '',
+      // altri campi se ti servono
+    }));
+}
+
+async function run() {
+  console.log('Fetching latest news…');
+  const api = await fetchJson(NEWS_URL);
+
+  if (!api || !Array.isArray(api.articles)) {
+    throw new Error('Invalid API response structure');
+  }
+
+  const next = { updatedAt: new Date().toISOString(), items: normalize(api.articles) };
+
+  const outPath = path.join(process.cwd(), 'news-data.json');
+  let prev = null;
+
+  try {
+    prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+  } catch (_) {
+    // file assente o invalido: verrà scritto da zero
+  }
+
+  const prevStr = prev ? JSON.stringify(prev.items) : '';
+  const nextStr = JSON.stringify(next.items);
+
+  if (prevStr === nextStr) {
+    console.log('No changes in news; nothing to update.');
+    // exit 0: il workflow non committerà nulla
+    process.exit(0);
+  }
+
+  fs.writeFileSync(outPath, JSON.stringify(next, null, 2), 'utf8');
+  console.log('news-data.json updated.');
+}
+
+run().catch((err) => {
+  console.error('Fetch failed:', err && err.message ? err.message : err);
+  process.exit(1);
 });
