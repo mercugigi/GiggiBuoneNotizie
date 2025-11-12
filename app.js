@@ -1,73 +1,94 @@
-/**
- * app.js — Client della web-app (APK) sempre aggiornato
- * - Legge SEMPRE il JSON online dal repo (cache-busting)
- * - Ricerca smart (titolo+descrizione+fonte+categoria) con messaggio “nel recente periodo”
- * - Filtro per data (calendario)
- * - Cache locale per uso offline
- */
+/* ===========================
+   app.js — VERSIONE COMPLETA
+   =========================== */
 
-const DATA_URL = "https://raw.githubusercontent.com/mercugigi/GiggiBuoneNotizie/main/news-data.json";
-const RECENT_DAYS = 60; // “recente periodo” per il messaggio della ricerca
+/* Sorgente dati: SEMPRE dal repo GitHub, con cache-buster */
+const DATA_URL =
+  "https://raw.githubusercontent.com/mercugigi/GiggiBuoneNotizie/main/news-data.json";
 
-let allNews = [];         // lista piatta
-let newsByDate = {};      // indice per_data { YYYY-MM-DD: [...] }
-let lastUpdatedISO = "";  // ISO string
+/* Giorni considerati “recente periodo” per il messaggio della ricerca */
+const RECENT_DAYS = 60;
+
+let allNews = [];         // tutte le notizie in lista piatta
+let newsByDate = {};      // indice per_data { "YYYY-MM-DD": [ ... ] }
 let currentDateKey = "";  // data selezionata (YYYY-MM-DD)
 
-function norm(s="") {
-  return s
-    .toString()
+/* ---------- UTIL ---------- */
+function norm(s = "") {
+  return s.toString()
     .toLowerCase()
-    .normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "") // rimuove accenti
     .trim();
 }
+function escapeHtml(s=""){
+  return s.replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+}
+function formatISO(iso){
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("it-IT",{ day:"2-digit", month:"long", year:"numeric" });
+}
+function formatDateKey(key){
+  if (!key) return "";
+  const [y,m,d] = key.split("-");
+  return `${d}/${m}/${y}`;
+}
+function renderMessage(text) {
+  const container = document.querySelector("[data-news-list]");
+  if (!container) return;
+  container.innerHTML = `<div class="news-empty">${escapeHtml(text)}</div>`;
+}
 
+/* ---------- CARICAMENTO DATI ---------- */
 async function loadNews() {
-  const url = `${DATA_URL}?t=${Date.now()}`; // cache-buster
+  const url = `${DATA_URL}?nocache=${Date.now()}`; // forza NO cache
   try {
-    const res = await fetch(url, { headers: { "User-Agent":"GiggiGoodNewsApp/1.0" } });
+    const res = await fetch(url, { headers: { "User-Agent":"GiggiGoodNewsApp/1.0" }});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
     // salva copia offline
     localStorage.setItem("ggn:data", JSON.stringify(data));
+
     applyData(data);
   } catch (e) {
-    console.warn("⚠️ Online KO, uso cache locale:", e.message);
+    console.warn("Online KO, uso cache locale:", e.message);
     const raw = localStorage.getItem("ggn:data");
     if (raw) applyData(JSON.parse(raw));
-    else renderMessage("Nessun dato disponibile offline. Connettiti a internet.");
+    else renderMessage("Nessun dato disponibile. Connettiti a internet e riapri l’app.");
   }
 }
 
 function applyData(data) {
-  lastUpdatedISO = data.aggiornato_il || "";
-  allNews = Array.isArray(data.notizie) ? data.notizie : [];
+  allNews   = Array.isArray(data.notizie) ? data.notizie : [];
   newsByDate = data.per_data || {};
 
-  // Mostra data umana in testata (se presente l’elemento)
+  // data in testata (se c’è l’elemento)
   const headerDate = document.querySelector("[data-header-date]");
   if (headerDate) {
-    const d = new Date();
-    headerDate.textContent = d.toLocaleDateString("it-IT", { weekday:"long", day:"2-digit", month:"long", year:"numeric" });
+    headerDate.textContent = new Date().toLocaleDateString(
+      "it-IT",
+      { weekday:"long", day:"2-digit", month:"long", year:"numeric" }
+    );
   }
 
-  // Imposta min/max del datePicker (per comodità)
+  // limiti calendario (se presente)
   const picker = document.querySelector("#datePicker");
   if (picker) {
-    const keys = Object.keys(newsByDate).filter(k => k !== "senzadata").sort(); // asc
+    const keys = Object.keys(newsByDate).filter(k => k !== "senzadata").sort();
     if (keys.length) {
       picker.min = keys[0];
       picker.max = keys[keys.length - 1];
     }
   }
 
-  // Mostra il giorno più recente
+  // mostra giorno più recente disponibile
   const keysDesc = Object.keys(newsByDate).filter(k => k !== "senzadata").sort().reverse();
   currentDateKey = keysDesc[0] || "";
   renderByDate(currentDateKey);
 }
 
+/* ---------- RENDER ---------- */
 function renderByDate(dateKey) {
   currentDateKey = dateKey;
   const list = newsByDate[dateKey] || [];
@@ -76,7 +97,7 @@ function renderByDate(dateKey) {
   container.innerHTML = "";
 
   if (!list.length) {
-    renderMessage(`Nessuna notizia per ${formatDate(dateKey)}.`);
+    renderMessage(`Nessuna notizia per ${formatDateKey(dateKey)}.`);
     return;
   }
 
@@ -93,6 +114,7 @@ function renderByDate(dateKey) {
   }
 }
 
+/* ---------- RICERCA ---------- */
 function searchNews(query) {
   const q = norm(query);
   const container = document.querySelector("[data-news-list]");
@@ -100,7 +122,6 @@ function searchNews(query) {
 
   if (!q) { renderByDate(currentDateKey); return; }
 
-  // filtro full-text
   const hits = allNews.filter(n =>
     norm(n.titolo).includes(q) ||
     norm(n.descrizione).includes(q) ||
@@ -108,10 +129,7 @@ function searchNews(query) {
     norm(n.categoria).includes(q)
   );
 
-  // se zero risultati → messaggio “recente periodo”
   if (!hits.length) {
-    container.innerHTML = "";
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
     const msg = `Nessun risultato trovato per “${escapeHtml(query)}” nel recente periodo (ultimi ${RECENT_DAYS} giorni). Prova una parola diversa o scegli una data dal calendario.`;
     renderMessage(msg);
     return;
@@ -131,34 +149,24 @@ function searchNews(query) {
   }
 }
 
+/* ---------- LISTENERS ---------- */
 function setupSearch() {
   const input = document.querySelector("#searchInput");
   const btn = document.querySelector("#searchBtn");
   if (input) input.addEventListener("keyup", (e) => { if (e.key === "Enter") searchNews(input.value); });
-  if (btn) btn.addEventListener("click", () => searchNews(input?.value || ""));
+  if (btn)   btn.addEventListener("click", () => searchNews(input?.value || ""));
 }
-
 function setupDatePicker() {
   const picker = document.querySelector("#datePicker");
   if (!picker) return;
   picker.addEventListener("change", () => {
     const v = picker.value; // YYYY-MM-DD
     if (v && newsByDate[v]) renderByDate(v);
-    else if (v) renderMessage(`Nessuna notizia per ${formatDate(v)}.`);
+    else if (v) renderMessage(`Nessuna notizia per ${formatDateKey(v)}.`);
   });
 }
 
-/* ——— Helpers ——— */
-function renderMessage(text) {
-  const container = document.querySelector("[data-news-list]");
-  if (!container) return;
-  container.innerHTML = `<div class="news-empty">${escapeHtml(text)}</div>`;
-}
-function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));}
-function formatISO(iso){ if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("it-IT",{day:"2-digit",month:"long",year:"numeric"}); }
-function formatDate(key){ if(!key) return ""; const [y,m,d]=key.split("-"); return `${d}/${m}/${y}`; }
-
-/* ——— Avvio ——— */
+/* ---------- AVVIO ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   setupSearch();
   setupDatePicker();
