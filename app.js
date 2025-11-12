@@ -1,205 +1,168 @@
-// Configurazione
-const categoryEmojis = {
-    'technology': '💻',
-    'business': '💼',
-    'science': '🔬',
-    'health': '🏥',
-    'sports': '⚽',
-    'entertainment': '🎬',
-    'general': '🌍'
-};
+/**
+ * app.js — Client della web-app (APK) sempre aggiornato
+ * - Legge SEMPRE il JSON online dal repo (cache-busting)
+ * - Ricerca smart (titolo+descrizione+fonte+categoria)
+ * - Filtro per data (dal calendario)
+ * - Salvataggio ultima copia in localStorage per uso offline
+ */
 
-const categoryNames = {
-    'technology': 'Tecnologia',
-    'business': 'Business',
-    'science': 'Scienza',
-    'health': 'Salute',
-    'sports': 'Sport',
-    'entertainment': 'Intrattenimento',
-    'general': 'Generale'
-};
+const DATA_URL = "https://raw.githubusercontent.com/mercugigi/GiggiBuoneNotizie/main/news-data.json";
 
-let allNews = [];
-let currentCategory = 'all';
+let allNews = [];         // lista piatta
+let newsByDate = {};      // indice per_data { YYYY-MM-DD: [...] }
+let lastUpdatedISO = "";  // ISO string
+let currentDateKey = "";  // data selezionata (YYYY-MM-DD)
 
-// Inizializzazione
-document.addEventListener('DOMContentLoaded', async () => {
-    updateDate();
-    setupEventListeners();
-    await loadNews();
-});
-
-// Aggiorna data corrente
-function updateDate() {
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    };
-    const date = new Date().toLocaleDateString('it-IT', options);
-    document.getElementById('currentDate').textContent = `📅 ${date}`;
+/** util: rimuove accenti e normalizza */
+function norm(s="") {
+  return s
+    .toString()
+    .toLowerCase()
+    .normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .trim();
 }
 
-// Setup Event Listeners
-function setupEventListeners() {
-    // Tabs
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            currentCategory = tab.dataset.category;
-            filterNews();
-        });
-    });
-
-    // Search
-    document.getElementById('searchBox').addEventListener('input', (e) => {
-        searchNews(e.target.value);
-    });
-
-    // Modal
-    document.getElementById('closeModal').addEventListener('click', closeModal);
-    document.getElementById('modal').addEventListener('click', (e) => {
-        if (e.target.id === 'modal') closeModal();
-    });
-}
-
-// Carica notizie da NewsAPI
+/** carica online con cache-busting, fallback a localStorage offline */
 async function loadNews() {
-    const loading = document.getElementById('loading');
-    const error = document.getElementById('error');
-    const newsGrid = document.getElementById('newsGrid');
+  const url = `${DATA_URL}?t=${Date.now()}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent":"GiggiGoodNewsApp/1.0" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-    try {
-        loading.style.display = 'block';
-        error.style.display = 'none';
-        newsGrid.innerHTML = '';
+    // salva copia offline
+    localStorage.setItem("ggn:data", JSON.stringify(data));
 
-        // Carica notizie da file JSON (generate da GitHub Actions)
-        const response = await fetch('news-data.json');
-        
-        if (!response.ok) {
-            throw new Error('Impossibile caricare le notizie');
-        }
-
-        const data = await response.json();
-        allNews = data.articles || [];
-
-        loading.style.display = 'none';
-
-        if (allNews.length === 0) {
-            error.style.display = 'block';
-            error.textContent = '📭 Nessuna notizia disponibile al momento';
-        } else {
-            displayNews(allNews);
-        }
-
-    } catch (err) {
-        console.error('Errore caricamento notizie:', err);
-        loading.style.display = 'none';
-        error.style.display = 'block';
-        error.textContent = `❌ Errore: ${err.message}. Le notizie verranno aggiornate automaticamente domani alle 6:00`;
-    }
-}
-
-// Mostra notizie
-function displayNews(newsArray) {
-    const newsGrid = document.getElementById('newsGrid');
-    newsGrid.innerHTML = '';
-
-    newsArray.forEach((article, index) => {
-        const category = article.category || 'general';
-        const emoji = categoryEmojis[category] || '📰';
-        
-        const card = document.createElement('div');
-        card.className = 'news-card';
-        card.innerHTML = `
-            <div class="news-number">${index + 1}</div>
-            <div class="news-emoji">${emoji}</div>
-            <span class="news-category">${categoryNames[category] || 'Generale'}</span>
-            <h3 class="news-title">${article.title}</h3>
-            <p class="news-source">📡 ${article.source || 'Fonte non disponibile'}</p>
-        `;
-        
-        card.addEventListener('click', () => openModal(article, emoji, category));
-        newsGrid.appendChild(card);
-    });
-}
-
-// Filtra per categoria
-function filterNews() {
-    if (currentCategory === 'all') {
-        displayNews(allNews);
+    applyData(data);
+  } catch (e) {
+    console.warn("⚠️ Online KO, uso cache locale:", e.message);
+    const raw = localStorage.getItem("ggn:data");
+    if (raw) {
+      applyData(JSON.parse(raw));
     } else {
-        const filtered = allNews.filter(article => article.category === currentCategory);
-        displayNews(filtered);
+      renderMessage("Nessun dato disponibile offline. Connettiti a internet.");
     }
+  }
 }
 
-// Cerca notizie
+/** applica struttura a memoria e aggiorna UI */
+function applyData(data) {
+  lastUpdatedISO = data.aggiornato_il || "";
+  allNews = Array.isArray(data.notizie) ? data.notizie : [];
+  newsByDate = data.per_data || {};
+
+  // mostra data di “oggi” nella testata, se hai un elemento dedicato
+  const headerDate = document.querySelector("[data-header-date]");
+  if (headerDate) {
+    const d = new Date();
+    headerDate.textContent = d.toLocaleDateString("it-IT", { weekday:"long", day:"2-digit", month:"long", year:"numeric" });
+  }
+
+  // default: mostra le notizie del giorno più recente disponibile
+  const keys = Object.keys(newsByDate).filter(k => k !== "senzadata").sort().reverse();
+  currentDateKey = keys[0] || "";
+  renderByDate(currentDateKey);
+}
+
+/** rendering lista notizie per data */
+function renderByDate(dateKey) {
+  currentDateKey = dateKey;
+  const list = newsByDate[dateKey] || [];
+  const container = document.querySelector("[data-news-list]");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!list.length) {
+    renderMessage(`Nessuna notizia per ${formatDate(dateKey)}.`);
+    return;
+  }
+
+  for (const n of list) {
+    const card = document.createElement("div");
+    card.className = "news-card";
+    card.innerHTML = `
+      <div class="news-title">${escapeHtml(n.titolo)}</div>
+      <div class="news-meta">${escapeHtml(n.fonte || "")} — ${formatISO(n.pubblicato)}</div>
+      <div class="news-desc">${escapeHtml(n.descrizione || "")}</div>
+      <a class="news-link" href="${n.url}" target="_blank" rel="noopener">Apri fonte</a>
+    `;
+    container.appendChild(card);
+  }
+}
+
+/** ricerca smart su TUTTE le notizie (titolo/descrizione/fonte/categoria) */
 function searchNews(query) {
-    if (!query.trim()) {
-        filterNews();
-        return;
-    }
+  const q = norm(query);
+  if (!q) { renderByDate(currentDateKey); return; }
 
-    const searchTerm = query.toLowerCase();
-    const filtered = allNews.filter(article => {
-        const titleMatch = article.title.toLowerCase().includes(searchTerm);
-        const descMatch = article.description?.toLowerCase().includes(searchTerm);
-        const contentMatch = article.content?.toLowerCase().includes(searchTerm);
-        
-        return titleMatch || descMatch || contentMatch;
+  const results = allNews.filter(n =>
+    norm(n.titolo).includes(q) ||
+    norm(n.descrizione).includes(q) ||
+    norm(n.fonte).includes(q) ||
+    norm(n.categoria).includes(q)
+  );
+
+  const container = document.querySelector("[data-news-list]");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!results.length) {
+    renderMessage(`Nessun risultato per “${escapeHtml(query)}”.`);
+    return;
+  }
+
+  for (const n of results) {
+    const card = document.createElement("div");
+    card.className = "news-card";
+    card.innerHTML = `
+      <div class="news-title">${escapeHtml(n.titolo)}</div>
+      <div class="news-meta">${escapeHtml(n.fonte || "")} — ${formatISO(n.pubblicato)} — <span class="tag">${escapeHtml(n.categoria)}</span></div>
+      <div class="news-desc">${escapeHtml(n.descrizione || "")}</div>
+      <a class="news-link" href="${n.url}" target="_blank" rel="noopener">Apri fonte</a>
+    `;
+    container.appendChild(card);
+  }
+}
+
+/** hook UI: campo ricerca con id #searchInput (se esiste) */
+function setupSearch() {
+  const input = document.querySelector("#searchInput");
+  const btn = document.querySelector("#searchBtn");
+  if (input) {
+    input.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") searchNews(input.value);
     });
-
-    displayNews(filtered);
+  }
+  if (btn) btn.addEventListener("click", () => searchNews(input?.value || ""));
 }
 
-// Apri modal
-function openModal(article, emoji, category) {
-    const modal = document.getElementById('modal');
-    const modalEmoji = document.getElementById('modalEmoji');
-    const modalCategory = document.getElementById('modalCategory');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalSource = document.getElementById('modalSource');
-    const modalDate = document.getElementById('modalDate');
-    const modalContent = document.getElementById('modalContent');
-
-    modalEmoji.textContent = emoji;
-    modalCategory.textContent = categoryNames[category] || 'Generale';
-    modalTitle.textContent = article.title;
-    modalSource.textContent = `📡 ${article.source || 'Fonte non disponibile'}`;
-    
-    const date = article.publishedAt ? new Date(article.publishedAt).toLocaleDateString('it-IT') : 'Data non disponibile';
-    modalDate.textContent = `📅 ${date}`;
-
-    // Formatta contenuto articolo
-    let content = `<p>${article.description || ''}</p>`;
-    
-    if (article.content) {
-        // Divide il contenuto in paragrafi
-        const paragraphs = article.content.split('\n\n');
-        content += paragraphs.map(p => `<p>${p}</p>`).join('');
+/** hook UI: date picker con id #datePicker (se esiste) */
+function setupDatePicker() {
+  const picker = document.querySelector("#datePicker");
+  if (!picker) return;
+  picker.addEventListener("change", () => {
+    const v = picker.value; // YYYY-MM-DD
+    if (v && newsByDate[v]) {
+      renderByDate(v);
+    } else if (v) {
+      renderMessage(`Nessuna notizia per ${formatDate(v)}.`);
     }
-
-    if (article.url) {
-        content += `<p><a href="${article.url}" target="_blank" style="color: #667eea; font-weight: 600;">🔗 Leggi l'articolo completo</a></p>`;
-    }
-
-    modalContent.innerHTML = content;
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
+  });
 }
 
-// Chiudi modal
-function closeModal() {
-    const modal = document.getElementById('modal');
-    modal.classList.remove('active');
-    document.body.style.overflow = 'auto';
+/** helpers UI */
+function renderMessage(text) {
+  const container = document.querySelector("[data-news-list]");
+  if (!container) return;
+  container.innerHTML = `<div class="news-empty">${escapeHtml(text)}</div>`;
 }
+function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));}
+function formatISO(iso){ if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("it-IT",{day:"2-digit",month:"long",year:"numeric"}); }
+function formatDate(key){ if(!key) return ""; const [y,m,d]=key.split("-"); return `${d}/${m}/${y}`; }
 
-// Chiudi modal con ESC
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
+/** avvio */
+document.addEventListener("DOMContentLoaded", () => {
+  setupSearch();
+  setupDatePicker();
+  loadNews();
 });
