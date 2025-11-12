@@ -26,22 +26,18 @@ const BASE_URL = "https://newsapi.org/v2/top-headlines?language=it&pageSize=30";
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(
-        url,
-        { headers: { "User-Agent": "GiggiGoodNewsBot/1.0" } },
-        (res) => {
-          let data = "";
-          res.on("data", (c) => (data += c));
-          res.on("end", () => {
-            try {
-              if (res.statusCode < 200 || res.statusCode >= 300) {
-                return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0,180)}`));
-              }
-              resolve(JSON.parse(data));
-            } catch (e) { reject(e); }
-          });
-        }
-      )
+      .get(url, { headers: { "User-Agent": "GiggiGoodNewsBot/1.0" } }, (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          try {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0,180)}`));
+            }
+            resolve(JSON.parse(data));
+          } catch (e) { reject(e); }
+        });
+      })
       .on("error", reject)
       .setTimeout(15000, function () { this.destroy(new Error("Timeout API")); });
   });
