@@ -13,57 +13,47 @@ jobs:
       contents: write  # serve per commit e push automatici
 
     steps:
-      # 1️⃣ Checkout del repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # necessario per i pull/rebase completi
+          fetch-depth: 0
 
-      # 2️⃣ Setup di Node.js (versione LTS stabile)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # 3️⃣ Installa eventuali dipendenze (opzionale, se hai un package.json)
       - name: Install deps (if any)
         run: |
           if [ -f "package.json" ]; then
             npm install
           fi
 
-      # 4️⃣ Esegue lo script che genera il file aggiornato
       - name: Fetch latest news
         run: node fetch-news.js
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
 
-      # 5️⃣ Verifica se il file news-data.json è cambiato
       - name: Check if news data changed
         id: diff
         run: |
           git diff --quiet news-data.json || echo "changed=true" >> $GITHUB_OUTPUT
 
-      # 6️⃣ Commit & Push solo se il file è cambiato
       - name: Commit & push if changed
         if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          echo "🔄 Allineo il repository remoto..."
           git fetch origin main
           git checkout main
           git reset --hard origin/main
 
-          echo "📝 Aggiungo e commito news-data.json..."
           git add news-data.json
           git commit -m "chore: update news-data.json [skip ci]" || echo "Nessuna modifica da committare"
 
-          echo "⬇️ Rebase locale e push finale..."
           git pull --rebase --autostash origin main || true
           git push origin HEAD:main
 
-      # 7️⃣ Log di conferma
       - name: Job complete
         run: echo "✅ Aggiornamento completato con successo!"
