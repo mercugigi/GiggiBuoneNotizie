@@ -1,101 +1,87 @@
 /**
- * fetch-news.js — Genera news-data.json con archivio per data
- * Output:
- * {
- *   "aggiornato_il": "...",
- *   "totale": N,
- *   "notizie": [...],
- *   "per_data": { "YYYY-MM-DD": [ ... ] }
- * }
+ * fetch-news.js — versione stabile e completa
+ * Aggiorna automaticamente news-data.json con notizie vere
+ * Fonti: BBC News, ANSA, Reuters, SkyTG24 (via NewsAPI.org)
+ * © Giggi Good News
  */
 
-const fs = require("fs");
-const path = require("path");
-const https = require("https");
+import fs from "fs";
+import fetch from "node-fetch";
 
-const NEWS_API_KEY = process.env.NEWS_API_KEY;
-if (!NEWS_API_KEY) {
-  console.error("❌ Manca NEWS_API_KEY nei Secrets di GitHub.");
-  process.exit(1);
-}
+const API_KEY = process.env.NEWS_API_KEY;
+const OUTPUT_FILE = "news-data.json";
+const SOURCES = [
+  "bbc-news",
+  "ansa",
+  "reuters",
+  "sky-tg24"
+];
 
-const CATEGORIES = ["technology","business","science","health","sports","entertainment","general"];
-const BASE_URL = "https://newsapi.org/v2/top-headlines?language=it&pageSize=30";
+// Numero max di articoli per fonte
+const LIMIT = 12;
 
-/** GET con User-Agent (NewsAPI rifiuta richieste anonime) */
-function fetchJson(url) {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, { headers: { "User-Agent": "GiggiGoodNewsBot/1.0" } }, (res) => {
-        let data = "";
-        res.on("data", (c) => (data += c));
-        res.on("end", () => {
-          try {
-            if (res.statusCode < 200 || res.statusCode >= 300) {
-              return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0,180)}`));
-            }
-            resolve(JSON.parse(data));
-          } catch (e) { reject(e); }
-        });
-      })
-      .on("error", reject)
-      .setTimeout(15000, function () { this.destroy(new Error("Timeout API")); });
-  });
-}
+// Funzione di pausa per sicurezza API
+const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
-function normalize(articles, categoria) {
-  return (articles || [])
-    .filter(a => a && a.title && a.url)
-    .map(a => {
-      const iso = a.publishedAt || "";
-      const data_articolo = iso ? iso.slice(0,10) : "";
-      return {
-        categoria,
-        titolo: a.title,
-        fonte: a.source?.name || "",
-        url: a.url,
-        descrizione: a.description || "",
-        pubblicato: iso,
-        data_articolo
-      };
-    });
+async function fetchSource(source) {
+  const url = `https://newsapi.org/v2/top-headlines?sources=${source}&pageSize=${LIMIT}&language=it&apiKey=${API_KEY}`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.articles) return [];
+    return data.articles.map(a => ({
+      titolo: a.title || "",
+      descrizione: a.description || "",
+      url: a.url || "",
+      fonte: a.source?.name || source,
+      pubblicato: a.publishedAt || new Date().toISOString(),
+      categoria: a.category || "",
+    }));
+  } catch (err) {
+    console.error(`❌ Errore su ${source}:`, err.message);
+    return [];
+  }
 }
 
 async function run() {
-  console.log("⚙️ Raccolta notizie…");
-  let tutte = [];
+  console.log("🚀 Avvio raccolta notizie reali...");
 
-  for (const cat of CATEGORIES) {
-    const url = `${BASE_URL}&category=${cat}&apiKey=${NEWS_API_KEY}`;
-    try {
-      const json = await fetchJson(url);
-      const items = normalize(json.articles, cat);
-      console.log(`✅ ${cat}: ${items.length} articoli`);
-      tutte = tutte.concat(items);
-    } catch (e) {
-      console.log(`❌ ${cat}: ${e.message}`);
-    }
+  if (!API_KEY) {
+    console.error("❌ Manca la variabile NEWS_API_KEY nei Secrets GitHub!");
+    process.exit(1);
   }
 
-  // Ordina per data (desc)
-  tutte.sort((a,b) => new Date(b.pubblicato) - new Date(a.pubblicato));
+  let allNews = [];
+  for (const src of SOURCES) {
+    console.log(`🔹 Raccolgo da ${src}...`);
+    const news = await fetchSource(src);
+    allNews.push(...news);
+    await wait(1500); // evita blocchi API
+  }
 
-  // Indice per data
+  // Ordina per data più recente
+  allNews.sort((a,b) => new Date(b.pubblicato) - new Date(a.pubblicato));
+
+  // Raggruppa per data (AAAA-MM-GG)
   const per_data = {};
-  for (const n of tutte) {
-    const key = n.data_articolo || "senzadata";
-    (per_data[key] ||= []).push(n);
+  for (const n of allNews) {
+    const key = n.pubblicato.slice(0,10);
+    if (!per_data[key]) per_data[key] = [];
+    per_data[key].push(n);
   }
 
   const out = {
     aggiornato_il: new Date().toISOString(),
-    totale: tutte.length,
-    notizie: tutte,
+    totale: allNews.length,
+    notizie: allNews,
     per_data
   };
 
-  fs.writeFileSync(path.join(process.cwd(),"news-data.json"), JSON.stringify(out,null,2), "utf8");
-  console.log(`💾 news-data.json scritto. Totale: ${out.totale}`);
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(out, null, 2), "utf-8");
+  console.log(`✅ File aggiornato: ${OUTPUT_FILE} (${allNews.length} notizie)`);
 }
 
-run().catch(e => { console.error("Errore generale:", e.message || e); process.exit(1); });
+run().catch(e => {
+  console.error("❌ Errore generale:", e);
+  process.exit(1);
+});
